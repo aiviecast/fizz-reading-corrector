@@ -1,0 +1,4 @@
+[package]
+name = "fizz_reading_corrector"
+version = "0.1.0"
+description = "Fizz reading corrector — pre-TTS text filter that fixes proper-noun / mis-read readings (e.g. 空澄 -> そらすみ) via an ordered rule list"

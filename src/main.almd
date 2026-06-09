@@ -1,0 +1,48 @@
+// CLI エントリポイント — stdin の各行テキストに読み補正をかけて出力する。
+//
+//   ... | fizz-reading-corrector | (TTS 合成へ)
+//
+// stdin: 1 行 1 テキスト (プレーン、JSON ではない) → stdout: 補正後テキスト。
+//
+// 既定は lime (ラムネ) のルール。環境変数 FIZZ_READING_DICT に TSV パスを与えると
+// そのルールに差し替える:
+//   "漢字\tかな"        リテラル全置換
+//   "re:パターン\tかな"  正規表現置換
+// EOF (空行) で終了。
+
+import self as rc
+import io
+import env
+import string
+import list
+import fs
+
+// ルールを解決する。FIZZ_READING_DICT があれば TSV から、無ければ lime 既定。
+effect fn resolve_rules() -> Result[List[(String, String, Bool)], String] = {
+  let dict = string.trim(env.get("FIZZ_READING_DICT") ?? "")
+  if dict == "" then {
+    ok(rc.lime_rules())
+  } else {
+    let lines = fs.read_lines(dict)!
+    ok(list.filter_map(lines, (ln) => rc.parse_rule_line(ln)))
+  }
+}
+
+effect fn main() -> Unit = {
+  let rules = match resolve_rules() {
+    ok(r)  => r,
+    err(e) => {
+      eprintln("[reading-corrector] dict load failed: ${e} — using lime defaults")
+      rc.lime_rules()
+    },
+  }
+  var open = true
+  while open {
+    let line = io.read_line()
+    if string.trim(line) == "" then {
+      open = false
+    } else {
+      println(rc.correct(string.trim(line), rules))
+    }
+  }
+}

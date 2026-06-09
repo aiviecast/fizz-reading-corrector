@@ -1,0 +1,54 @@
+// fizz_reading_corrector — TTS 前段の読み補正フィルタ。
+//
+// 責務 (一行): TTS に渡す直前のテキストで、固有名詞や誤読しやすい語の「漢字→
+// かな」置換をかける (例: 「空澄」→「そらすみ」)。
+//
+// LLM 出力に依存せず読みを固定するための保険。persona に読みを書いても LLM が
+// たまに漢字単独で出すケースを、ここで一手にカバーする。
+//
+// ルールは (pattern, replacement, is_regex) のタプル列。**順序が意味を持つ**:
+// 「空澄(そらすみ)」のような括弧付き読みを先に潰してから裸の「空澄」を置換する
+// (逆順だと「そらすみ(そらすみ)」と二重化する)。
+//
+// 1 ルール = 1 タプルにしているのは、cross-package の record-variant 構築が
+// almide で不安定なため (タプルは安定)。is_regex=true は regex.replace、false は
+// string.replace (部分文字列全置換)。
+
+import string
+import regex
+import list
+
+// 1 ルールを適用する。
+fn apply_rule(text: String, rule: (String, String, Bool)) -> String =
+  if rule.2 then regex.replace(rule.0, text, rule.1)
+  else string.replace(text, rule.0, rule.1)
+
+// ルール列を順番に適用する。
+fn correct(text: String, rules: List[(String, String, Bool)]) -> String =
+  list.fold(rules, text, (acc, r) => apply_rule(acc, r))
+
+// lime (ラムネ) の既定ルール。括弧付き → 裸 → 一般語の順。
+//   ・「好き」→「すき」: Aivis が短文で「好」単独+「き」分離で誤読する事故を潰す。
+//     送り「き」付きのみに絞る (「好む」「好物」は別読みなので触らない)。
+fn lime_rules() -> List[(String, String, Bool)] = [
+  ("空澄\\s*[((]\\s*そらすみ\\s*[))]", "そらすみ", true),
+  ("空澄", "そらすみ", false),
+  ("好き", "すき", false),
+]
+
+// 辞書 TSV の 1 行をルールに変換する。
+//   "漢字\tかな"        → リテラル置換 (is_regex=false)
+//   "re:パターン\tかな"  → 正規表現置換 (is_regex=true)
+// 空行・タブ無しの行は none (読み飛ばす)。
+fn parse_rule_line(line: String) -> Option[(String, String, Bool)] = {
+  let cols = string.split(line, "\t")
+  match (list.first(cols), list.last(cols)) {
+    (some(from), some(to)) => {
+      if list.len(cols) < 2 or string.trim(from) == "" then none
+      else if string.starts_with(from, "re:") then
+        some((string.strip_prefix(from, "re:") ?? from, to, true))
+      else some((from, to, false))
+    },
+    _ => none,
+  }
+}

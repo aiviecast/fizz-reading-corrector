@@ -1,0 +1,41 @@
+import self as rc
+
+test "lime rules turn 空澄 into そらすみ" {
+  let r = rc.lime_rules()
+  assert_eq(rc.correct("空澄ちゃんだよ", r), "そらすみちゃんだよ")
+}
+
+test "bracketed reading is collapsed before the bare kanji (no doubling)" {
+  let r = rc.lime_rules()
+  // 「空澄(そらすみ)」→「そらすみ」(順序が逆だと「そらすみ(そらすみ)」になる)
+  assert_eq(rc.correct("わたしは空澄(そらすみ)です", r), "わたしはそらすみです")
+}
+
+test "好き becomes すき" {
+  let r = rc.lime_rules()
+  assert_eq(rc.correct("配信好き?", r), "配信すき?")
+}
+
+test "text without targets is unchanged" {
+  let r = rc.lime_rules()
+  assert_eq(rc.correct("こんにちは", r), "こんにちは")
+}
+
+test "correct applies rules in order (literal)" {
+  let rules = [("猫", "ねこ", false), ("ねこ", "ニャン", false)]
+  // 1: 猫→ねこ, 2: ねこ→ニャン  ⇒ 猫 は最終的に ニャン
+  assert_eq(rc.correct("猫が好き", rules), "ニャンが好き")
+}
+
+test "parse_rule_line: literal / regex / blank" {
+  match rc.parse_rule_line("空澄\tそらすみ") {
+    some(t) => { assert_eq(t.0, "空澄"); assert_eq(t.1, "そらすみ"); assert_eq(t.2, false) },
+    none    => assert_eq("parsed", "none"),
+  }
+  match rc.parse_rule_line("re:空\\s*澄\tそらすみ") {
+    some(t) => { assert_eq(t.0, "空\\s*澄"); assert_eq(t.2, true) },
+    none    => assert_eq("parsed", "none"),
+  }
+  assert_eq(rc.parse_rule_line(""), none)
+  assert_eq(rc.parse_rule_line("no-tab-here"), none)
+}
