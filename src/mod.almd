@@ -20,7 +20,7 @@ import list
 
 // 1 ルールを適用する。
 fn apply_rule(text: String, rule: (String, String, Bool)) -> String =
-  if rule.2 then regex.replace(rule.0, text, rule.1)
+  if rule.2 then regex.replace(regex.new(rule.0), text, rule.1)
   else string.replace(text, rule.0, rule.1)
 
 // ルール列を順番に適用する。
